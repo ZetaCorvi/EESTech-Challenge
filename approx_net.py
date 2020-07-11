@@ -4,11 +4,15 @@ import pandas as pd
 import datetime
 
 
-# распиши пожалуста каждую колонку так по типам
-dtype_dict = {"date": datetime, "low_c":float}
-try:
-	train_set = pd.read_csv("datasets/train.csv", encoding="cp1251", delimiter=';', dtype=dtype_dict)
-except FileNotFoundError:
-	pass
+data = pd.read_csv('train.csv', delimiter =';', encoding='cp1251')
+data = data[data.k_power != 0]
+data.dropna()
+training_set = data.iloc[:, [2,3,4, 7]].values
+training_set
 
-x_train = torch.Tensor(train_set[ "low_c"].values).float()
+######
+
+from sklearn.preprocessing import MinMaxScaler
+sc = MinMaxScaler(feature_range=(0,1))
+training_set_scaled = sc.fit_transform(training_set)
+training_set_scaled
