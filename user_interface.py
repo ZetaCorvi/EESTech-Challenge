@@ -1,5 +1,23 @@
 import wx
 import wx.adv
+import csv
+
+
+# dummy function to test form capabilities
+def ds_search(form_data):
+    file = open('datasets/train.csv', mode='r', encoding='windows-1251')
+    csv.register_dialect('dl', 'excel', delimiter=';')
+    csv_file = csv.reader(file, 'dl')
+
+    power = 0
+
+    for line in csv_file:
+        tpl = (line[1], line[2], line[3], line[4])
+        if tpl == form_data:
+            print(line)
+            power = line[8]
+
+    return power
 
 
 class FromFrm(wx.Frame):
@@ -38,7 +56,13 @@ class FromFrm(wx.Frame):
         btn.Bind(wx.EVT_BUTTON, self.on_press)
 
     def on_press(self, event):
-        power = 0
+        date = self.date_ctrl.GetValue().Format("%d.%m.%Y")
+        time = self.time_ctrl.GetValue().Format("%-H:%M")
+        cl = (int(self.cl_low.GetValue()), int(self.cl_mid.GetValue()), int(self.cl_high.GetValue()))
+
+        data = (f'{date} {time}', str(cl[0]), str(cl[1]), str(cl[2]))
+        power = ds_search(data)
+
         msg = wx.MessageDialog(self, message=f'The power is {power}')
         msg.ShowModal()
 
