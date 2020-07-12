@@ -9,7 +9,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 import torch.utils.data
 
-BATCHSIZE = 1000
+BATCHSIZE = 100
 CLASSES = 10
 EPOCHS = 10
 DIR = os.getcwd()
@@ -82,7 +82,6 @@ class DatasetESS(torch.utils.data.Dataset):
 		X = self.dataset.drop(columns="fact").iloc[idx, 1:].to_numpy().astype(float)
 
 		return X, Y
-
 
 def get_dataset():
 	"""load train and validate datasets"""
@@ -179,75 +178,43 @@ def net_optimazer():
 	print("  Params: ")
 	for key, value in trial.params.items():
 		print("    {}: {}".format(key, value))
-	# optuna.visualization.plot_intermediate_values(study)
 
 
-def precip_extract_data(precip: str):
-	precip_statements = [
-		"Явления погоды отсутствуют.",
-		"Без осадков.",
-		"Преимущественно без осадков",
-		"Обложной дождь",
-		"Ливневый дождь",
-		"Замерзающий (переохлажденный) дождь",
-		"Сильный ливневый дождь",
-		"Очень сильный ливневый дождь",
-		"Дождь со снегом",
-		"Сильный дождь со снегом",
-		"Обложной снег",
-		"Сильный обложной снег",
-		"Ливневый снег",
-		"Сильный ливневый дождь"
-	]
-
-	if precip is not "d":
-		for ind, statement in enumerate(precip_statements):
-			if precip == statement:
-				return float(1. - (ind / (len(precip_statements)-1)))
-	else:
-		return None
+# optuna.visualization.plot_intermediate_values(study)
 
 
-def extraxt_datasets(csv_file_name: str):
-	"""
-	Generate formatted training and validation datasets.
-		x_train,  y_validate
-	"""
+def precip_extract_data(precips: str):
+	precip_statements = {
+		"Явления погоды отсутствуют.": 0,
+		"d": 0,
+		"Без осадков.": 1,
+		"Преимущественно без осадков": 2,
+		"Обложной дождь": 3,
+		"Ливневый дождь": 4,
+		"Замерзающий (переохлажденный) дождь": 5,
+		"Сильный ливневый дождь": 6,
+		"Очень сильный ливневый дождь": 7,
+		"Дождь со снегом": 8,
+		"Сильный дождь со снегом": 9,
+		"Обложной снег": 10,
+		"Сильный обложной снег": 11,
+		"Ливневый снег": 12,
+		"Сильный ливневый снег": 13
+	}
 
-	dtype_dict = {"date": str,
-				  "low_c": float,
-				  "mid_c": float,
-				  "high_c": float,
-				  "cloudy": str,
-				  "precip": str,
-				  "k_power": str,
-				  "fact": int}
-
-	try:
-		dataset = pd.read_csv(csv_file_name, encoding="cp1251", delimiter=';', dtype=dtype_dict, index_col=False)[:500, :]
-	except FileNotFoundError:
-		pass
-
-	dataset = dataset.dropna()
-	dataset = dataset.combine_first(dataset["date"].apply(date_format))
-	dataset = dataset.combine_first(dataset["precip"].apply(precip_extract_data()))
-	dataset["k_power"] = dataset["k_power"].apply(k_power_to_float())
-
-	train_set = dataset.sample(frac=0.9)
-	validate_set = dataset.drop(x_train.index)
-
-	return train_set, validate_set
+	precips = precip_statements[precips] / (len(precip_statements) - 1)
+	return float(precips)
 
 
-def k_power_to_float(k_power_in_hour):
+def k_power_to_float(k_power):
 	"""
 	Convert k_power Series: str to Series: float
 	"""
 	try:
-		k_power_in_hour = k_power_in_hour.replace(",", ".")
+		k_power = k_power.replace(",", ".")
 	except:
 		pass
-	return float(k_power_in_hour)
+	return float(k_power)
 
 
 class AproxNet(torch.nn.Module):
@@ -257,16 +224,15 @@ class AproxNet(torch.nn.Module):
 		self.fc1 = torch.nn.Linear(8, n_hidden_neurons)
 		self.act1 = torch.nn.Sigmoid()
 		self.fc2 = torch.nn.Linear(n_hidden_neurons, n_hidden_neurons)
-		self.act2 = torch.nn.ReLU()
+		self.act2 = torch.nn.Sigmoid()
 		self.fc3 = torch.nn.Linear(n_hidden_neurons, n_hidden_neurons)
-		self.act3 = torch.nn.ReLU()
+		self.act3 = torch.nn.Sigmoid()
 		self.fc4 = torch.nn.Linear(n_hidden_neurons, n_hidden_neurons)
-		self.act4 = torch.nn.ReLU()
+		self.act4 = torch.nn.Sigmoid()
 		self.fc5 = torch.nn.Linear(n_hidden_neurons, n_hidden_neurons)
-		self.act5 = torch.nn.ReLU()
-		self.fc6 = torch.nn.Linear(n_hidden_neurons, n_hidden_neurons)
+		self.act5 = torch.nn.Sigmoid()
+		self.fc6 = torch.nn.Linear(n_hidden_neurons, 1)
 		self.act6 = torch.nn.ReLU()
-
 
 	def forward(self, x):
 		x = self.fc1(x)
@@ -285,24 +251,57 @@ class AproxNet(torch.nn.Module):
 		return (x)
 
 
-if __name__ is "main":
+def extraxt_datasets(csv_file_name: str):
+	"""
+	Generate formatted training and validation datasets.
+		x_train,  y_validate
+	"""
 
+	dtype_dict = {"date": str,
+				  "low_c": float,
+				  "mid_c": float,
+				  "high_c": float,
+				  "cloudy": str,
+				  "precip": str,
+				  "k_power": str,
+				  "fact": int}
+
+	try:
+		dataset = pd.read_csv(csv_file_name, encoding="cp1251", delimiter=';', dtype=dtype_dict, index_col=False)
+	except FileNotFoundError:
+		pass
+
+	dataset = dataset.dropna()
+	dataset = dataset.drop(columns="date").combine_first(dataset["date"].apply(date_format))
+	dataset["precip"] = dataset["precip"].apply(precip_extract_data).dropna()
+	dataset["k_power"] = dataset["k_power"].apply(k_power_to_float)
+	dataset = dataset.drop(columns="cloudy").drop(columns="object")
+
+	train_set = dataset.sample(frac=0.9)
+	validate_set = dataset.drop(train_set.index)
+
+	return train_set, validate_set
+
+
+if __name__ == "main":
 	train_data, validate_data = extraxt_datasets("datasets/train.csv")
 
-	x_train = torch.tensor(train_data.drop(columns="fact")[:, 1:])
-	y_train = torch.tensor(train_data["fact"]).unsqueeze_(dim=1)
-	x_validate = torch.tensor(validate_data.drop(columns="fact")[:, 1:].to(DEVICE))
-	y_validate = torch.tensor(validate_data["fact"].to(DEVICE)).unsqueeze_(dim=1)
 
-	aprox_net = AproxNet(250).to(DEVICE)
+	x_train = torch.tensor(train_data.drop(columns="fact").values.astype(float))
+	y_train = torch.tensor(train_data["fact"].astype(float).values).unsqueeze_(dim=1)
+	x_validate = torch.tensor(validate_data.drop(columns="fact").astype(float).values).to(DEVICE)
+	y_validate = torch.tensor(validate_data["fact"].astype(float).values).to(DEVICE).unsqueeze_(dim=1)
+
+	aprox_net = AproxNet(500).to(DEVICE)
 
 	loss = torch.nn.MSELoss()
 	optimizer = torch.optim.Adam(aprox_net.parameters())
 
-	batch_size = 10000
+	batch_size = 500
 
 	validate_loss_archive = []
 	validate_accuracy_archive = []
+
 
 	for epoch in range(100):
 
@@ -311,6 +310,8 @@ if __name__ is "main":
 		loss_mean_val = 0
 		accuracy_mean_val = 0
 
+		x = None
+		y = None
 		for start_index in range(0, len(x_train), batch_size):
 			optimizer.zero_grad()
 
@@ -321,13 +322,16 @@ if __name__ is "main":
 
 			preds = aprox_net.forward(x_batch)
 			loss_value = loss(preds, y_batch)
+
 			loss_value.backward()
 			optimizer.step()
 
-		validate_preds = aprox_net.forward(x_validate.float())
+			print(loss_value)
 
-		validate_loss = loss(validate_preds, y_validate)
-		validate_loss_archive.append(validate_loss)
-		accuracy = (validate_preds.argmax(dim=1) == y_validate).float().mean()
-		validate_accuracy_archive.append(accuracy)
-		print(accuracy)
+# validate_preds = aprox_net.forward(x_validate.float())
+
+# validate_loss = loss(validate_preds, y_validate)
+# validate_loss_archive.append(validate_loss)
+# accuracy = (validate_preds.argmax(dim=1) == y_validate).float().mean()
+# validate_accuracy_archive.append(accuracy)
+# print(accuracy)
