@@ -1,3 +1,4 @@
+optuna
 future==0.18.2
 h5py==2.10.0
 joblib==0.16.0
